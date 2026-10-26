@@ -1,0 +1,1435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ImmunoLab VR - Leukocyte Identification</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script>
+    tailwind.config = { 
+      theme: { 
+        extend: { 
+          fontFamily: { sans: ['-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'Helvetica', 'Arial', 'sans-serif'] },
+          colors: { apple: { bg: '#f5f5f7', card: '#ffffff', blue: '#0071e3', text: '#1d1d1f', sec: '#86868b' } } 
+        } 
+      } 
+    }
+  </script>
+  <style>
+    body { background-color: #f5f5f7; color: #1d1d1f; overflow-x: hidden; -webkit-font-smoothing: antialiased; user-select: none; }
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-thumb { background: #d1d1d6; border-radius: 4px; }
+
+    .fade-in { animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+    .modal-overlay { backdrop-filter: blur(8px); }
+    @keyframes pulseGlow { 0%, 100% { box-shadow: 0 0 15px rgba(0, 113, 227, 0.15); } 50% { box-shadow: 0 0 25px rgba(0, 113, 227, 0.5); } }
+    .drop-target-active { border: 2px dashed #0071e3 !important; animation: pulseGlow 1.5s infinite; background-color: rgba(0, 113, 227, 0.05) !important; cursor: crosshair; }
+
+    .apple-input { background: #f5f5f7; border: 1px solid transparent; border-radius: 12px; padding: 12px 16px; color: #1d1d1f; outline: none; transition: all 0.2s ease; }
+    .apple-input:focus { background: #ffffff; border-color: #0071e3; box-shadow: 0 0 0 4px rgba(0, 113, 227, 0.15); }
+    .apple-btn { background: #0071e3; color: white; border-radius: 999px; font-weight: 600; transition: all 0.2s; box-shadow: 0 2px 8px rgba(0, 113, 227, 0.2); cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .apple-btn:hover { background: #0077ed; transform: scale(1.02); box-shadow: 0 4px 12px rgba(0, 113, 227, 0.3); }
+    .apple-btn:active { transform: scale(0.98); }
+    .apple-btn:disabled { background: #d1d1d6; color: #ffffff; cursor: not-allowed; transform: none; box-shadow: none; }
+    
+    .apple-slider { -webkit-appearance: none; width: 100%; height: 8px; background: #d1d1d6; border-radius: 4px; outline: none; }
+    .apple-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 24px; height: 24px; border-radius: 50%; background: #ffffff; border: 1px solid #c7c7cc; box-shadow: 0 2px 8px rgba(0,0,0,0.25); cursor: pointer; transition: transform 0.1s; }
+    .apple-slider::-webkit-slider-thumb:hover { transform: scale(1.1); }
+
+    .reagent-vial { position: relative; width: 44px; height: 60px; border-radius: 6px 6px 14px 14px; background: linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(240,240,245,1) 50%, rgba(0,0,0,0.05) 100%); border: 2px solid rgba(0,0,0,0.1); box-shadow: inset -2px -2px 6px rgba(0,0,0,0.08), 3px 6px 12px rgba(0,0,0,0.08); cursor: pointer; overflow: hidden; transition: all 0.2s; }
+    .vial-liquid { position: absolute; bottom: 0; width: 100%; height: 50%; transition: height 0.3s; z-index: 0; opacity: 0.9; }
+
+    .slide-in-bench { width: 180px; height: 60px; background: rgba(255, 255, 255, 0.4); border: 1px solid rgba(0, 0, 0, 0.2); border-radius: 3px; position: relative; box-shadow: 0 8px 20px rgba(0,0,0,0.15); overflow: hidden; backdrop-filter: blur(4px); }
+    .glass-slide-frosted { position: absolute; left: 0; top: 0; bottom: 0; width: 35px; background: rgba(255,255,255,0.95); border-right: 1px solid rgba(0,0,0,0.2); }
+    
+    @keyframes dropFall { 0% { top: 0px; opacity: 1; transform: scaleY(1.5); } 80% { top: 40px; opacity: 1; transform: scaleY(1); } 100% { top: 45px; opacity: 0; transform: scale(2); } }
+    .anim-drop { animation: dropFall 0.3s ease-in forwards; }
+    @keyframes washCascade { 0% { top: -100%; opacity: 0.9; } 50% { top: 0%; opacity: 0.9; } 100% { top: 100%; opacity: 0; } }
+    .water-cascade { animation: washCascade 1s ease-in-out forwards; }
+    
+    .equip-btn.active-tool { border-color: #0071e3; background-color: rgba(0, 113, 227, 0.05); box-shadow: inset 0 0 0 1.5px #0071e3; }
+
+    #cursor-item { position: fixed; pointer-events: none; z-index: 9999; display: none; filter: drop-shadow(4px 8px 12px rgba(0,0,0,0.3)); }
+
+    .blur-transition { transition: filter 0.1s ease-out; }
+    
+    @keyframes smearSpread {
+        0% { width: 10px; opacity: 0.9; border-radius: 50%; }
+        100% { width: 120px; opacity: 0.6; border-radius: 5px 40px 40px 5px; background: linear-gradient(to right, #8a0303 0%, #d93838 70%, transparent 100%); }
+    }
+    .smear-active { animation: smearSpread 0.8s cubic-bezier(0.25, 1, 0.5, 1) forwards; }
+
+    .ref-scroll::-webkit-scrollbar { width: 4px; }
+    .ref-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+
+    @media print {
+      @page { margin: 12mm; size: A4; }
+      html, body { background: white !important; color: #1d1d1f !important; margin: 0; padding: 0; }
+      #app-wrapper, #toast-container, #cursor-item, .modal-overlay { display: none !important; }
+      #print-report { display: block !important; width: 100%; max-width: 1000px; margin: 0 auto; }
+      .print-header { display: flex; align-items: center; justify-content: space-between; border-bottom: 3px solid #0071e3; padding-bottom: 20px; margin-bottom: 30px; }
+      .print-section { margin-bottom: 35px; page-break-inside: avoid; }
+      .print-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+      .print-table th, .print-table td { padding: 10px; border: 1px solid #e2e8f0; text-align: left; font-size: 13px; }
+      .print-table th { background-color: #f8fafc; font-weight: 600; }
+    }
+  </style>
+</head>
+<body>
+
+  <div id="cursor-item"></div>
+  <div id="toast-container" class="fixed bottom-6 right-6 z-50 flex flex-col gap-3 pointer-events-none"></div>
+
+  <!-- PHASE 1: STARTUP MODAL -->
+  <div id="protocol-modal" class="modal-overlay fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+    <div class="bg-white border border-gray-200 rounded-[24px] max-w-2xl w-full p-8 shadow-2xl flex flex-col gap-5 fade-in">
+      <div class="flex items-center gap-4 border-b border-gray-100 pb-4">
+        <div class="w-12 h-12 rounded-xl bg-[#f0f9ff] flex items-center justify-center border border-[#bae6fd]">
+          <i class="fa-solid fa-microscope text-[#0071e3] text-xl"></i>
+        </div>
+        <div>
+          <h2 class="text-xl font-bold text-apple-text tracking-tight">Clinical Immunology Simulator</h2>
+          <p class="text-[13px] text-apple-sec">Phase 1: Peripheral Blood Smear & Differential</p>
+        </div>
+      </div>
+      
+      <p class="text-[14px] text-apple-text leading-relaxed bg-[#f5f5f7] p-4 rounded-xl border border-gray-200">
+        <strong class="text-[#0071e3] block mb-1">Laboratory Protocol:</strong>
+        Choose a patient's peripheral blood sample below to perform a <strong>Wright's Stain</strong> and conduct a morphological WBC differential.
+      </p>
+      
+      <p class="font-bold text-apple-text mt-2">Select a training sample to begin:</p>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <button onclick="startPracticePhase('p1')" class="bg-white border-2 border-gray-200 hover:border-[#0071e3] hover:bg-[#f0f9ff] rounded-xl p-4 text-left transition group shadow-sm">
+          <span class="block font-bold text-apple-text group-hover:text-[#0071e3]">Healthy Control</span>
+          <span class="text-[11px] text-apple-sec block mt-1 font-mono">5 Target Cells</span>
+        </button>
+        <button onclick="startPracticePhase('p2')" class="bg-white border-2 border-gray-200 hover:border-[#0071e3] hover:bg-[#f0f9ff] rounded-xl p-4 text-left transition group shadow-sm">
+          <span class="block font-bold text-apple-text group-hover:text-[#0071e3]">Patient Case X</span>
+          <span class="text-[11px] text-apple-sec block mt-1 font-mono">3 Target Cells (Eosinophilia)</span>
+        </button>
+      </div>
+      
+      <div class="pt-6 mt-2 border-t border-gray-100 flex justify-between items-center">
+        <span class="text-apple-sec text-[12px] font-medium">Already proficient?</span>
+        <button onclick="startExamPrompt()" class="bg-[#1d1d1f] hover:bg-[#333336] text-white px-6 py-2.5 rounded-full text-[13px] font-bold shadow-md transition flex items-center gap-2">
+          <span>Skip to Official Assessment</span>
+          <i class="fa-solid fa-arrow-right"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- COMPLETION MODAL -->
+  <div id="completion-modal" class="modal-overlay fixed inset-0 z-50 bg-black/60 hidden items-center justify-center p-4">
+    <div class="bg-white border border-gray-200 rounded-[24px] max-w-md w-full p-8 shadow-2xl flex flex-col items-center text-center gap-4 fade-in">
+      <div class="w-16 h-16 rounded-full bg-[#f0fdf4] border border-[#bbf7d0] flex items-center justify-center text-[#166534] text-3xl shadow-inner">
+        <i class="fa-solid fa-check-double"></i>
+      </div>
+      <h2 class="text-xl font-bold text-apple-text" id="comp-modal-title">Module Complete</h2>
+      <p class="text-[14px] text-apple-sec mb-4" id="comp-modal-desc">All required leukocytes have been accurately identified.</p>
+      <div id="comp-modal-actions" class="w-full flex flex-col gap-3">
+        <!-- Injected Actions -->
+      </div>
+    </div>
+  </div>
+
+  <!-- LOGIN MODAL -->
+  <div id="briefing-modal" class="modal-overlay fixed inset-0 z-50 bg-black/60 hidden items-center justify-center p-4">
+    <div class="bg-white border border-gray-200 rounded-[24px] max-w-md w-full p-8 shadow-2xl flex flex-col gap-5 fade-in">
+      <div class="flex items-center gap-4 border-b border-gray-100 pb-4">
+        <div class="w-12 h-12 rounded-xl bg-[#f0fdf4] flex items-center justify-center border border-[#bbf7d0]">
+          <i class="fa-solid fa-clipboard-user text-[#166534] text-xl"></i>
+        </div>
+        <div>
+          <h2 class="text-xl font-bold text-apple-text tracking-tight">Technologist Login</h2>
+          <p class="text-[13px] text-apple-sec">MICR 210 Official Assessment</p>
+        </div>
+      </div>
+      <p class="text-[14px] text-apple-text">Enter your credentials to begin the practical assessment and independent unknowns analysis.</p>
+      <div class="space-y-3 mt-2">
+        <input type="text" id="stu-name" placeholder="Full Name" class="apple-input w-full font-bold">
+        <input type="text" id="stu-id" placeholder="Student ID" class="apple-input w-full font-mono">
+      </div>
+      <button onclick="loginStudent()" class="apple-btn w-full py-3.5 text-[14px] mt-2">Begin Assessment</button>
+    </div>
+  </div>
+
+  <div id="app-wrapper" class="flex flex-col min-h-screen hidden opacity-0 transition-opacity duration-500">
+    <header class="bg-white/80 backdrop-blur-xl border-b border-gray-200/80 sticky top-0 z-40">
+      <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+        <div class="flex items-center gap-4">
+          <div class="h-10 w-10 rounded-[10px] bg-[#1c1c1e] border border-[#2c2c2e] flex items-center justify-center shadow-md">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+              <polygon points="12,2 22,7.5 22,18.5 12,24 2,18.5 2,7.5" fill="#0071e3"/>
+              <polygon points="12,2 22,7.5 12,12" fill="rgba(255,255,255,0.4)"/>
+              <polygon points="2,7.5 12,2 12,12" fill="rgba(255,255,255,0.2)"/>
+              <polygon points="12,24 22,18.5 12,12" fill="rgba(0,0,0,0.2)"/>
+            </svg>
+          </div>
+          <div>
+            <h1 class="text-[19px] font-bold text-apple-text tracking-tight">ImmunoLab <span class="text-[#0071e3] font-mono text-[10px] ml-1 px-2 py-0.5 bg-[#0071e3]/10 rounded-full">MICR 210</span></h1>
+            <p class="text-[11px] text-apple-sec font-medium">Leukocyte Identification & The Immune Reaction of Host</p>
+          </div>
+        </div>
+        <div class="flex gap-4 items-center">
+          <button onclick="resetCurrentProtocol()" class="text-[12px] font-bold text-[#ff3b30] hover:bg-[#ff3b30]/10 px-4 py-2 rounded-full transition border border-[#ff3b30]/30 bg-white shadow-sm flex items-center gap-2">
+            <i class="fa-solid fa-rotate-right"></i> Reset Bench
+          </button>
+          <div class="h-6 w-px bg-gray-300"></div>
+          <div class="flex gap-2">
+            <div id="nav-1" class="px-4 py-2 rounded-full text-[11px] font-bold bg-[#0071e3] text-white shadow-sm">1. GUIDED</div>
+            <div id="nav-2" class="px-4 py-2 rounded-full text-[11px] font-bold bg-[#e5e5ea] text-[#86868b]">2. CREDENTIALS</div>
+            <div id="nav-3" class="px-4 py-2 rounded-full text-[11px] font-bold bg-[#e5e5ea] text-[#86868b]">3. UNKNOWNS</div>
+            <div id="nav-4" class="px-4 py-2 rounded-full text-[11px] font-bold bg-[#e5e5ea] text-[#86868b]">4. REPORT</div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <div id="guided-bar" class="max-w-7xl mx-auto w-full px-6 mt-6 hidden">
+      <div class="bg-white border-2 border-[#0071e3]/30 rounded-[16px] p-4 shadow-sm flex items-center gap-5 relative overflow-hidden">
+        <div class="w-12 h-12 rounded-full bg-[#0071e3]/10 text-[#0071e3] font-bold flex items-center justify-center font-mono shrink-0 text-lg shadow-inner" id="guide-step-num">1</div>
+        <div class="flex-1">
+          <span class="text-[10px] text-[#0071e3] uppercase font-bold tracking-wider">Protocol Directive Tracker</span>
+          <p id="guide-step-text" class="text-apple-text font-bold text-base mt-0.5">Equip 'Clean Slide' and place it onto the Staining Tray.</p>
+        </div>
+      </div>
+    </div>
+
+    <main class="flex-1 max-w-7xl mx-auto w-full px-6 py-6 flex flex-col gap-6">
+      
+      <!-- MODULE 1 & 3: BENCHWORK -->
+      <div id="module-bench" class="w-full flex-col hidden fade-in">
+        <nav class="flex p-1 bg-[#e5e5ea] rounded-[14px] w-full max-w-2xl shadow-inner mb-6 relative z-30">
+          <button id="tab-smear" onclick="showBenchTab('smear')" class="flex-1 py-2.5 px-3 rounded-[10px] text-[13px] font-bold bg-white text-apple-text shadow-sm flex justify-center items-center gap-2 transition-all"><i class="fa-solid fa-droplet text-[#0071e3]"></i> Blood Smear Prep</button>
+          <button id="tab-scope" onclick="showBenchTab('scope')" class="flex-1 py-2.5 px-3 rounded-[10px] text-[13px] font-bold text-[#86868b] hover:text-apple-text flex justify-center items-center gap-2 transition-all"><i class="fa-solid fa-eye"></i> Microscopic Eval</button>
+        </nav>
+
+        <!-- VIEW: BLOOD SMEAR -->
+        <section id="view-smear" class="bench-view flex flex-col lg:flex-row gap-6">
+          <div class="lg:w-1/4 bg-white border border-gray-200/60 rounded-[24px] p-6 shadow-[0_4px_20px_rgba(0,0,0,0.03)] flex flex-col gap-4 relative z-20">
+            <div class="flex justify-between items-center border-b border-gray-100 pb-3">
+              <h3 class="font-bold text-[11px] text-apple-sec uppercase tracking-wider">Equipment Rack</h3>
+              <button onclick="clearHand()" class="text-[10px] text-[#0071e3] font-semibold hover:bg-[#0071e3]/10 px-2 py-1 rounded transition">Drop [Esc]</button>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-3">
+              <button onclick="equip('slide')" class="equip-btn flex flex-col items-center p-3 rounded-xl border border-gray-200 bg-[#f5f5f7] transition" data-id="slide">
+                <svg viewBox="0 0 100 50" class="w-14 h-7 mb-2 drop-shadow-sm">
+                  <rect width="90" height="30" y="10" rx="2" fill="rgba(255,255,255,0.9)" stroke="#cbd5e1" stroke-width="2"/>
+                  <rect width="25" height="30" y="10" fill="rgba(255,255,255,0.95)" stroke-right="1px solid #94a3b8"/>
+                </svg>
+                <span class="text-[10px] font-semibold text-apple-text">Clean Slide</span>
+              </button>
+              <button onclick="equip('spreader')" class="equip-btn flex flex-col items-center p-3 rounded-xl border border-gray-200 bg-[#f5f5f7] transition" data-id="spreader">
+                <svg viewBox="0 0 60 60" class="w-8 h-8 mb-1 drop-shadow-sm -rotate-12">
+                  <rect x="25" y="0" width="8" height="50" rx="3" fill="rgba(255,255,255,0.9)" stroke="#cbd5e1" stroke-width="2"/>
+                </svg>
+                <span class="text-[10px] font-semibold text-apple-text">Spreader</span>
+              </button>
+            </div>
+
+            <button onclick="equip('blood')" class="equip-btn flex items-center justify-center p-3 rounded-xl border border-gray-200 bg-[#fff1f2] hover:border-red-300 transition gap-3" data-id="blood">
+              <i class="fa-solid fa-vial text-red-500 text-xl"></i>
+              <span class="text-[11px] font-semibold text-red-900">Patient Blood (EDTA)</span>
+            </button>
+            
+            <div class="flex gap-3 justify-center mt-2 border-t border-gray-100 pt-4" id="reagent-rack">
+              <div class="flex flex-col items-center gap-2 reagent-item"><div class="reagent-vial" onclick="equip('stain')"><div class="vial-liquid bg-[#312e81]"></div></div><span class="text-[9px] font-bold text-apple-sec reagent-hint">Wright's Stain</span></div>
+              <div class="flex flex-col items-center gap-2 reagent-item"><div class="reagent-vial" onclick="equip('buffer')"><div class="vial-liquid bg-[#dbeafe]"></div></div><span class="text-[9px] font-bold text-apple-sec reagent-hint">Buffer (pH 6.8)</span></div>
+              <div class="flex flex-col items-center gap-2 reagent-item"><div class="reagent-vial" onclick="equip('water')"><div class="vial-liquid bg-[#32ade6]"></div></div><span class="text-[9px] font-bold text-apple-sec reagent-hint">DI Water</span></div>
+            </div>
+
+            <div class="grid grid-cols-1 gap-3 mt-2 border-t border-gray-100 pt-4">
+              <button onclick="airDry()" class="flex flex-col items-center p-3 rounded-xl border border-gray-200 bg-[#f0fdf4] transition hover:border-green-300">
+                <i class="fa-solid fa-wind text-green-500 text-2xl mb-2"></i>
+                <span class="text-[10px] font-semibold text-green-800">Air Dry Smear</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="lg:w-3/4 bg-white border border-gray-200/60 rounded-[24px] p-6 shadow-[0_4px_20px_rgba(0,0,0,0.03)] flex flex-col min-h-[500px] relative z-10" id="bench-surface">
+            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between bg-[#f5f5f7] p-3 rounded-[12px] border border-gray-200 text-[12px] mb-6 shadow-inner gap-4">
+              <div class="flex items-center gap-4">
+                <span class="flex items-center gap-2"><i class="fa-solid fa-hand text-apple-sec"></i> <span id="label-hand" class="text-[#0071e3] font-mono font-bold tracking-wider">Empty</span></span>
+                <span class="w-px h-4 bg-gray-300"></span>
+                <span class="flex items-center gap-2"><i class="fa-regular fa-square text-apple-sec"></i> <span id="label-smear" class="text-[#1d1d1f] font-mono font-bold">None</span></span>
+                <span class="w-px h-4 bg-gray-300"></span>
+                
+                <div id="sim-timer-container" class="hidden bg-[#0071e3]/10 text-[#0071e3] border border-[#0071e3]/30 px-3 py-1 rounded-full text-[11px] font-bold font-mono flex items-center gap-2 shadow-inner">
+                    <i class="fa-solid fa-stopwatch animate-pulse"></i> <span id="sim-timer-text">00:00</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="flex-1 bg-white rounded-xl border border-dashed border-gray-300 relative flex items-center justify-center p-8">
+              <div id="staining-tray" class="w-[340px] h-[200px] bg-[#f8fafc] rounded-[20px] border-2 border-gray-200 shadow-[inset_0_4px_15px_rgba(0,0,0,0.03)] flex flex-col items-center justify-center relative overflow-hidden transition-all duration-300 cursor-pointer hover:border-[#0071e3]" onclick="clickTray()">
+                <div class="absolute top-4 w-full text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest pointer-events-none">Preparation Tray</div>
+                <div class="absolute w-full h-2.5 bg-gradient-to-b from-gray-200 to-gray-300 top-20 pointer-events-none shadow-sm border-y border-gray-300"></div>
+                <div class="absolute w-full h-2.5 bg-gradient-to-b from-gray-200 to-gray-300 bottom-20 pointer-events-none shadow-sm border-y border-gray-300"></div>
+
+                <div id="slide-station" class="slide-in-bench hidden items-center justify-center z-10 shadow-md">
+                  <div class="glass-slide-frosted"></div>
+                  <div id="slide-blood-drop" class="absolute w-3 h-3 bg-red-700 rounded-full opacity-0 pointer-events-none" style="left: 45px; top: 25px;"></div>
+                  <div id="slide-smear-layer" class="absolute h-[30px] opacity-0 pointer-events-none" style="left: 50px; top: 15px; border-radius: 50%;"></div>
+                  <div id="slide-stain-layer" class="absolute inset-0 bg-[#312e81] opacity-0 mix-blend-multiply transition-opacity duration-500 pointer-events-none z-10"></div>
+                  <div id="slide-wash-cascade" class="absolute inset-0 bg-sky-300/80 hidden pointer-events-none z-20 backdrop-blur-[2px]"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- VIEW: MICROSCOPE -->
+        <section id="view-scope" class="bench-view hidden flex-col lg:flex-row gap-6">
+          <div class="lg:w-2/3 bg-white border border-gray-200/60 rounded-[24px] p-8 shadow-[0_4px_20px_rgba(0,0,0,0.03)] flex flex-col items-center relative z-20">
+            
+            <div class="w-full flex justify-between items-center mb-6 relative">
+              <h3 class="font-bold text-[18px] text-apple-text z-30 relative bg-white px-2">Optical Viewport</h3>
+              
+              <div class="flex items-center gap-3 relative z-40">
+                <div id="target-counter" class="text-[14px] font-mono font-bold text-white bg-[#0071e3] px-4 py-2 rounded-full shadow-md transition-transform duration-300">Identified: 0/5</div>
+                <button onclick="toggleGuide()" class="text-[12px] font-bold text-apple-sec hover:text-[#0071e3] bg-[#f5f5f7] hover:bg-[#e0f2fe] px-3 py-2 rounded-full border border-gray-200 transition shadow-sm flex items-center gap-1.5">
+                    <i class="fa-solid fa-book-open"></i> Guide
+                </button>
+              </div>
+            </div>
+            
+            <div class="relative mt-2 w-full flex justify-center">
+              <div class="w-[420px] h-[420px] rounded-full overflow-hidden border-[16px] border-[#1c1c1e] bg-[#050505] flex items-center justify-center cursor-move shadow-[0_15px_40px_rgba(0,0,0,0.4)] relative z-10" style="touch-action: none;">
+                <canvas id="microscope-canvas" width="460" height="460" class="blur-transition"></canvas>
+                <div class="absolute inset-0 pointer-events-none opacity-20"><div class="w-full h-[1px] bg-black absolute top-1/2"></div><div class="h-full w-[1px] bg-black absolute left-1/2"></div></div>
+                <div class="absolute inset-0 pointer-events-none rounded-full shadow-[inset_0_0_120px_rgba(0,0,0,0.95)]"></div>
+              </div>
+              
+              <div id="morph-guide" class="absolute right-0 top-0 bottom-0 w-56 bg-white border border-gray-200 rounded-xl shadow-2xl p-4 hidden flex-col z-50">
+                <div class="flex justify-between items-center mb-3 border-b border-gray-100 pb-2">
+                    <h4 class="text-[11px] font-bold text-apple-sec uppercase tracking-wider">Morphology Guide</h4>
+                    <button onclick="toggleGuide()" class="text-gray-400 hover:text-red-500"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div class="overflow-y-auto flex-1 ref-scroll pr-1 space-y-4">
+                  <div class="flex gap-3 items-center">
+                    <div class="w-10 h-10 shrink-0 bg-[#fdf2f8] rounded-full border border-pink-200 flex items-center justify-center">
+                        <svg width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#fbcfe8"/><path d="M7,7 Q12,5 15,9 Q18,15 11,18 Q6,15 7,7" fill="#4c1d95" opacity="0.9"/><circle cx="12" cy="12" r="10" fill="url(#n-gran)" opacity="0.3"/><defs><pattern id="n-gran" width="2" height="2" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="0.5" fill="#9d174d"/></pattern></defs></svg>
+                    </div>
+                    <div>
+                      <span class="text-[11px] font-bold text-[#0071e3] block">Neutrophil</span>
+                      <span class="text-[10px] text-apple-text leading-tight block">Multi-lobed (2-5). Pale pink cyto. Fine granules.</span>
+                    </div>
+                  </div>
+                  <div class="flex gap-3 items-center">
+                    <div class="w-10 h-10 shrink-0 bg-[#fdf2f8] rounded-full border border-pink-200 flex items-center justify-center">
+                        <svg width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#fee2e2"/><circle cx="8" cy="12" r="4" fill="#4c1d95"/><circle cx="16" cy="12" r="4" fill="#4c1d95"/><path d="M8,12 Q12,8 16,12" stroke="#4c1d95" fill="none" stroke-width="2"/><circle cx="12" cy="12" r="10" fill="url(#e-gran)" opacity="0.6"/><defs><pattern id="e-gran" width="3" height="3" patternUnits="userSpaceOnUse"><circle cx="1.5" cy="1.5" r="1" fill="#ef4444"/></pattern></defs></svg>
+                    </div>
+                    <div>
+                      <span class="text-[11px] font-bold text-[#0071e3] block">Eosinophil</span>
+                      <span class="text-[10px] text-apple-text leading-tight block">Bi-lobed nucleus. Large red/orange granules.</span>
+                    </div>
+                  </div>
+                  <div class="flex gap-3 items-center">
+                    <div class="w-10 h-10 shrink-0 bg-[#fdf2f8] rounded-full border border-pink-200 flex items-center justify-center">
+                        <svg width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#f3e8ff"/><circle cx="12" cy="12" r="10" fill="url(#b-gran)"/><defs><pattern id="b-gran" width="4" height="4" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.8" fill="#1e1b4b"/></pattern></defs></svg>
+                    </div>
+                    <div>
+                      <span class="text-[11px] font-bold text-[#0071e3] block">Basophil</span>
+                      <span class="text-[10px] text-apple-text leading-tight block">Nucleus obscured. Large dark purple granules.</span>
+                    </div>
+                  </div>
+                  <div class="flex gap-3 items-center">
+                    <div class="w-10 h-10 shrink-0 bg-[#fdf2f8] rounded-full border border-pink-200 flex items-center justify-center">
+                        <svg width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="#bae6fd"/><circle cx="13" cy="12" r="6.5" fill="#312e81"/></svg>
+                    </div>
+                    <div>
+                      <span class="text-[11px] font-bold text-[#0071e3] block">Lymphocyte</span>
+                      <span class="text-[10px] text-apple-text leading-tight block">Large round nucleus. Scanty light blue cyto rim.</span>
+                    </div>
+                  </div>
+                  <div class="flex gap-3 items-center">
+                    <div class="w-10 h-10 shrink-0 bg-[#fdf2f8] rounded-full border border-pink-200 flex items-center justify-center">
+                        <svg width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="12" fill="#cbd5e1"/><path d="M6,12 Q6,4 12,6 Q18,8 18,12 Q18,20 12,18 Q8,17 6,12" fill="#4c1d95"/><circle cx="16" cy="6" r="1.5" fill="#fff"/></svg>
+                    </div>
+                    <div>
+                      <span class="text-[11px] font-bold text-[#0071e3] block">Monocyte</span>
+                      <span class="text-[10px] text-apple-text leading-tight block">Kidney/U-shaped nucleus. Grey-blue cyto (vacuoles).</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div id="micro-result-eval" class="mt-6 w-full max-w-lg p-4 rounded-xl hidden text-[13px] text-center border shadow-sm transition-all flex-col"></div>
+          </div>
+
+          <div class="lg:w-1/3 flex flex-col gap-6">
+            <div class="bg-white border border-gray-200/60 rounded-[24px] p-6 shadow-[0_4px_20px_rgba(0,0,0,0.03)]">
+              <h3 class="font-bold text-[12px] text-apple-sec uppercase tracking-wider mb-5 border-b border-gray-100 pb-3">Optics Control</h3>
+              
+              <div class="space-y-6">
+                <div>
+                  <span class="text-[12px] font-bold text-apple-text block mb-3">Objective Lens</span>
+                  <div class="flex gap-2 p-1.5 bg-[#e5e5ea] rounded-xl">
+                    <button onclick="setLens(10)" class="lens-btn flex-1 py-2 text-[12px] font-bold rounded-lg transition bg-white text-apple-text shadow-sm border border-gray-300" data-mag="10">10x</button>
+                    <button onclick="setLens(40)" class="lens-btn flex-1 py-2 text-[12px] font-bold rounded-lg transition text-[#86868b] hover:text-apple-text border border-transparent" data-mag="40">40x</button>
+                    <button onclick="setLens(100)" class="lens-btn flex-1 py-2 text-[12px] font-bold rounded-lg transition text-[#86868b] hover:text-apple-text border border-transparent" data-mag="100">100x Oil</button>
+                  </div>
+                </div>
+
+                <div>
+                  <div class="flex justify-between items-center mb-3">
+                    <span class="text-[12px] font-bold text-apple-text">Immersion Oil</span>
+                    <span id="oil-status-badge" class="font-mono text-[#ff3b30] font-bold text-[10px] bg-[#ff3b30]/10 px-2 py-1 rounded">Dry Lens</span>
+                  </div>
+                  <button onclick="applyOil()" class="w-full bg-[#f5f5f7] border border-gray-200 hover:border-[#0071e3] text-[#1d1d1f] font-bold py-2 rounded-xl transition text-[13px] shadow-sm flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-eye-dropper"></i> Apply 1 Drop
+                  </button>
+                </div>
+                
+                <div>
+                  <div class="flex justify-between items-center mb-2"><span class="text-[11px] font-bold text-apple-sec uppercase tracking-wider">Coarse Focus</span></div>
+                  <input id="micro-coarse-slider" type="range" min="0" max="100" value="10" class="apple-slider">
+                </div>
+                <div>
+                  <div class="flex justify-between items-center mb-2"><span class="text-[11px] font-bold text-apple-sec uppercase tracking-wider">Fine Focus</span></div>
+                  <input id="micro-fine-slider" type="range" min="0" max="100" value="85" class="apple-slider">
+                </div>
+              </div>
+
+              <div id="scope-submit-area" class="mt-6 hidden pt-6 border-t border-gray-100">
+                <label class="block text-[12px] font-bold text-apple-text mb-2">Identify Centered Leukocyte:</label>
+                <div class="grid grid-cols-2 gap-2 mb-3">
+                  <label class="flex items-center gap-2 text-[12px] bg-[#f5f5f7] p-2 rounded-lg cursor-pointer border border-transparent hover:border-[#0071e3]/50"><input type="radio" name="wbc-type" value="neutrophil" class="accent-[#0071e3]"> Neutrophil</label>
+                  <label class="flex items-center gap-2 text-[12px] bg-[#f5f5f7] p-2 rounded-lg cursor-pointer border border-transparent hover:border-[#0071e3]/50"><input type="radio" name="wbc-type" value="eosinophil" class="accent-[#0071e3]"> Eosinophil</label>
+                  <label class="flex items-center gap-2 text-[12px] bg-[#f5f5f7] p-2 rounded-lg cursor-pointer border border-transparent hover:border-[#0071e3]/50"><input type="radio" name="wbc-type" value="basophil" class="accent-[#0071e3]"> Basophil</label>
+                  <label class="flex items-center gap-2 text-[12px] bg-[#f5f5f7] p-2 rounded-lg cursor-pointer border border-transparent hover:border-[#0071e3]/50"><input type="radio" name="wbc-type" value="lymphocyte" class="accent-[#0071e3]"> Lymphocyte</label>
+                  <label class="col-span-2 flex items-center justify-center gap-2 text-[12px] bg-[#f5f5f7] p-2 rounded-lg cursor-pointer border border-transparent hover:border-[#0071e3]/50"><input type="radio" name="wbc-type" value="monocyte" class="accent-[#0071e3]"> Monocyte</label>
+                </div>
+                <button id="btn-wbc-log" onclick="verifyWBC()" class="apple-btn w-full py-3 text-[14px]">
+                  Submit Identification
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- MODULE 2: PRACTICAL WORKFLOW QUIZ -->
+      <div id="module-quiz" class="hidden w-full max-w-4xl mx-auto flex-col gap-6 fade-in">
+        <div class="bg-white border border-gray-200/60 rounded-[24px] p-8 shadow-[0_4px_20px_rgba(0,0,0,0.03)]">
+          <h2 class="text-xl font-bold text-apple-text border-b border-gray-100 pb-4 mb-6">Phase 2: Protocol Workflow Assessment</h2>
+          
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-5 text-[13px]">
+            <div class="bg-[#f5f5f7] p-5 rounded-[16px] border border-gray-200 shadow-sm flex flex-col justify-between">
+              <p class="font-bold mb-3 text-apple-text text-[14px]">1. What is the recommended angle for holding the spreader slide to achieve a proper feathered edge?</p>
+              <div>
+                <label class="flex items-start gap-3 mb-2 cursor-pointer"><input type="radio" name="q1" value="a" class="mt-1 w-4 h-4 accent-[#0071e3]"> <span class="leading-relaxed">90 degrees (vertical).</span></label>
+                <label class="flex items-start gap-3 cursor-pointer"><input type="radio" name="q1" value="b" class="mt-1 w-4 h-4 accent-[#0071e3]"> <span class="leading-relaxed">30 to 45 degrees.</span></label>
+              </div>
+            </div>
+            
+            <div class="bg-[#f5f5f7] p-5 rounded-[16px] border border-gray-200 shadow-sm flex flex-col justify-between">
+              <p class="font-bold mb-3 text-apple-text text-[14px]">2. Why must the blood smear be completely air-dried before staining?</p>
+              <div>
+                <label class="flex items-start gap-3 mb-2 cursor-pointer"><input type="radio" name="q2" value="a" class="mt-1 w-4 h-4 accent-[#0071e3]"> <span class="leading-relaxed">To adhere the cells to the glass and preserve morphology.</span></label>
+                <label class="flex items-start gap-3 cursor-pointer"><input type="radio" name="q2" value="b" class="mt-1 w-4 h-4 accent-[#0071e3]"> <span class="leading-relaxed">To separate the red blood cells from the white blood cells.</span></label>
+              </div>
+            </div>
+            
+            <div class="bg-[#f5f5f7] p-5 rounded-[16px] border border-gray-200 shadow-sm flex flex-col justify-between">
+              <p class="font-bold mb-3 text-apple-text text-[14px]">3. What is the explicit purpose of adding Buffer (pH 6.8) to the Wright's Stain?</p>
+              <div>
+                <label class="flex items-start gap-3 mb-2 cursor-pointer"><input type="radio" name="q3" value="a" class="mt-1 w-4 h-4 accent-[#0071e3]"> <span class="leading-relaxed">To wash away excess unstained blood from the slide.</span></label>
+                <label class="flex items-start gap-3 cursor-pointer"><input type="radio" name="q3" value="b" class="mt-1 w-4 h-4 accent-[#0071e3]"> <span class="leading-relaxed">To initiate ionization so acidic and basic dyes bind properly.</span></label>
+              </div>
+            </div>
+
+            <div class="bg-[#f5f5f7] p-5 rounded-[16px] border border-gray-200 shadow-sm flex flex-col justify-between">
+              <p class="font-bold mb-3 text-apple-text text-[14px]">4. Which objective lens strictly requires the application of immersion oil for optimal resolution?</p>
+              <div>
+                <label class="flex items-start gap-3 mb-2 cursor-pointer"><input type="radio" name="q4" value="a" class="mt-1 w-4 h-4 accent-[#0071e3]"> <span class="leading-relaxed">100x Objective.</span></label>
+                <label class="flex items-start gap-3 cursor-pointer"><input type="radio" name="q4" value="b" class="mt-1 w-4 h-4 accent-[#0071e3]"> <span class="leading-relaxed">40x Objective.</span></label>
+              </div>
+            </div>
+
+            <div class="bg-[#f5f5f7] p-5 rounded-[16px] border border-gray-200 shadow-sm flex flex-col justify-between">
+              <p class="font-bold mb-3 text-apple-text text-[14px]">5. Where on the slide should the microscopic differential be performed?</p>
+              <div>
+                <label class="flex items-start gap-3 mb-2 cursor-pointer"><input type="radio" name="q5" value="a" class="mt-1 w-4 h-4 accent-[#0071e3]"> <span class="leading-relaxed">The feathered edge where cells are well-separated.</span></label>
+                <label class="flex items-start gap-3 cursor-pointer"><input type="radio" name="q5" value="b" class="mt-1 w-4 h-4 accent-[#0071e3]"> <span class="leading-relaxed">The thick origin point of the blood drop.</span></label>
+              </div>
+            </div>
+
+            <div class="bg-[#f5f5f7] p-5 rounded-[16px] border border-gray-200 shadow-sm flex flex-col justify-between">
+              <p class="font-bold mb-3 text-apple-text text-[14px]">6. During the final preparation step, how should the slide be treated with DI water?</p>
+              <div>
+                <label class="flex items-start gap-3 mb-2 cursor-pointer"><input type="radio" name="q6" value="a" class="mt-1 w-4 h-4 accent-[#0071e3]"> <span class="leading-relaxed">Vigorously scrubbed under high pressure.</span></label>
+                <label class="flex items-start gap-3 cursor-pointer"><input type="radio" name="q6" value="b" class="mt-1 w-4 h-4 accent-[#0071e3]"> <span class="leading-relaxed">Gently rinsed to remove excess stain without dislodging cells.</span></label>
+              </div>
+            </div>
+          </div>
+          
+          <button onclick="submitQuiz()" class="apple-btn w-full py-3.5 mt-8 text-[14px] shadow-md">Submit & Initialize Unknowns</button>
+        </div>
+      </div>
+
+      <!-- MODULE 3: UNKNOWNS HUB -->
+      <div id="module-unknowns-hub" class="hidden w-full max-w-3xl mx-auto flex-col gap-6 fade-in">
+        <div class="bg-white border border-gray-200/60 rounded-[32px] p-10 shadow-[0_4px_20px_rgba(0,0,0,0.03)] text-center">
+          <div class="w-20 h-20 rounded-full bg-[#f0f9ff] flex items-center justify-center mx-auto mb-5 border border-[#bae6fd] shadow-inner"><i class="fa-solid fa-user-injured text-3xl text-[#0071e3]"></i></div>
+          <h2 class="text-2xl font-bold text-apple-text mb-3">Independent Differential Practicum</h2>
+          <p class="text-[14px] text-apple-sec mb-8 leading-relaxed px-6">Process the peripheral blood from the unknown clinical cases below. Perform a smear, stain it, and identify the predominant abnormal leukocyte. Instructor guidance and feedback are disabled.</p>
+          
+          <div class="flex flex-col sm:flex-row justify-center gap-5">
+            <button id="btn-u1" onclick="startUnknown('u1')" class="apple-btn px-6 py-3.5 flex items-center justify-center gap-2 text-[14px] shadow-sm"><i class="fa-solid fa-vial"></i> Load Patient A</button>
+            <button id="btn-u2" onclick="startUnknown('u2')" class="bg-[#e5e5ea] text-[#86868b] font-bold px-6 py-3.5 rounded-full flex items-center justify-center gap-2 cursor-not-allowed text-[14px]" disabled><i class="fa-solid fa-lock"></i> Load Patient B</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- MODULE 4: REPORT -->
+      <div id="module-report" class="hidden w-full max-w-4xl mx-auto bg-white border border-gray-200/60 rounded-[32px] p-6 sm:p-10 shadow-xl fade-in my-8">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-end border-b border-gray-200 pb-5 mb-8 gap-4">
+          <div>
+            <h2 class="text-3xl font-bold text-apple-text mb-1">Final LIMS Report</h2>
+            <p class="text-[13px] text-apple-sec font-medium">Respiratory Therapy Department | MICR 210 Clinical Immunology</p>
+            <p class="text-[13px] text-apple-sec mt-1">Course Instructor: Dr. Hassan Al Fadhel</p>
+          </div>
+          <button onclick="window.print()" class="apple-btn px-5 py-2.5 text-[14px] flex items-center gap-2 shadow-sm"><i class="fa-solid fa-print"></i> Print PDF</button>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-10">
+          <div class="bg-[#f8fafc] p-5 rounded-[20px] border border-gray-200 shadow-sm print-section">
+            <h3 class="text-[11px] font-bold text-apple-sec uppercase tracking-wider mb-3 border-b border-gray-100 pb-2">Technologist Profile</h3>
+            <p class="text-[14px] text-apple-text mb-2"><strong>Name:</strong> <span id="rep-name-out"></span></p>
+            <p class="text-[14px] text-apple-text mb-2"><strong>ID:</strong> <span id="rep-id-out" class="font-mono"></span></p>
+            <p class="text-[14px] text-apple-text"><strong>Workflow Score:</strong> <span id="rep-quiz-out" class="font-bold text-[#0071e3]"></span></p>
+          </div>
+          <div class="bg-[#f8fafc] p-5 rounded-[20px] border border-gray-200 shadow-sm print-section">
+            <h3 class="text-[11px] font-bold text-apple-sec uppercase tracking-wider mb-3 border-b border-gray-100 pb-2">Guided Completion</h3>
+            <p class="text-[14px] text-apple-text mb-2 flex justify-between items-center"><strong>Smear Preparation:</strong> <span id="rep-g-prep"></span></p>
+            <p class="text-[14px] text-apple-text flex justify-between items-center"><strong>Morphological ID:</strong> <span id="rep-g-id"></span></p>
+          </div>
+        </div>
+
+        <h3 class="text-[13px] font-bold text-apple-text uppercase tracking-wider mb-4 border-b border-gray-200 pb-2">Protocol Assessment Review</h3>
+        <div id="rep-quiz-details" class="bg-white border border-gray-200 rounded-[16px] p-5 shadow-sm mb-10 print-section"></div>
+
+        <h3 class="text-[13px] font-bold text-apple-text uppercase tracking-wider mb-4 border-b border-gray-200 pb-2">Independent Unknowns Analysis</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 print-section">
+            <div class="border border-gray-200 rounded-[16px] overflow-hidden shadow-sm flex flex-col">
+                <div class="bg-[#f5f5f7] p-4 border-b border-gray-200 flex justify-between items-center">
+                    <span class="font-mono font-bold text-[#0071e3]">Patient A</span>
+                    <span id="rep-u1-res"></span>
+                </div>
+                <div class="p-4 flex-1 bg-white text-[13px]">
+                    <div id="rep-u1-prep"></div>
+                    <div id="rep-u1-id-det"></div>
+                </div>
+            </div>
+
+            <div class="border border-gray-200 rounded-[16px] overflow-hidden shadow-sm flex flex-col">
+                <div class="bg-[#f5f5f7] p-4 border-b border-gray-200 flex justify-between items-center">
+                    <span class="font-mono font-bold text-[#0071e3]">Patient B</span>
+                    <span id="rep-u2-res"></span>
+                </div>
+                <div class="p-4 flex-1 bg-white text-[13px]">
+                    <div id="rep-u2-prep"></div>
+                    <div id="rep-u2-id-det"></div>
+                </div>
+            </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Print Layout -->
+  <div id="print-report" class="hidden">
+    <div class="print-header">
+      <div>
+        <h1>Mohammad Al-Mana College for Medical Sciences</h1>
+        <h2 style="color: #0071e3; margin-top: 5px; margin-bottom: 5px;">MICR 210: Leukocyte Differential Report</h2>
+        <h3 style="color: #64748b; font-size: 14px; font-weight: normal;">Course Instructor: Dr. Hassan Al Fadhel</h3>
+      </div>
+      <div style="text-align: right; font-size: 12px; color: #64748b; font-family: monospace;" id="print-date"></div>
+    </div>
+    <div class="print-section">
+      <h3>Technologist Profile</h3>
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+        <div><span style="font-size:10px; color:#64748b; text-transform:uppercase; font-weight:bold;">Name</span><br><strong style="font-size:14px;" id="p-name"></strong></div>
+        <div><span style="font-size:10px; color:#64748b; text-transform:uppercase; font-weight:bold;">ID</span><br><strong style="font-size:14px; font-family:monospace;" id="p-id"></strong></div>
+        <div><span style="font-size:10px; color:#64748b; text-transform:uppercase; font-weight:bold;">Protocol Assessment</span><br><strong style="font-size:14px; color:#0071e3;" id="p-quiz"></strong></div>
+      </div>
+    </div>
+    
+    <div class="print-section">
+      <h3>Protocol Assessment Review</h3>
+      <div id="print-quiz-details" style="font-size: 12px; border: 1px solid #e2e8f0; padding: 15px; background: #f8fafc;"></div>
+    </div>
+
+    <div class="print-section">
+      <h3>I. Guided Practicum</h3>
+      <table class="print-table"><tr><th width="50%">Smear Preparation (Wright's Stain)</th><td id="p-g-prep"></td></tr><tr><th>Microscopic Identification (Morphology)</th><td id="p-g-id"></td></tr></table>
+    </div>
+
+    <div class="print-section">
+      <h3>II. Independent Unknowns Analysis</h3>
+      <table class="print-table">
+        <tr><th style="width: 20%;">Isolate</th><th style="width: 35%;">Preparation Protocol</th><th style="width: 35%;">Diagnostic Identification</th><th style="width: 10%; text-align:center;">Final</th></tr>
+        <tr><td style="font-family:monospace; font-weight:bold; color:#0071e3;">Patient A</td><td id="p-u1-prep"></td><td id="p-u1-det"></td><td id="p-u1-res" style="text-align:center; font-weight:bold;"></td></tr>
+        <tr><td style="font-family:monospace; font-weight:bold; color:#0071e3;">Patient B</td><td id="p-u2-prep"></td><td id="p-u2-det"></td><td id="p-u2-res" style="text-align:center; font-weight:bold;"></td></tr>
+      </table>
+    </div>
+
+    <div class="print-section" style="margin-top: 50px; display: flex; justify-content: space-between; align-items: flex-end;">
+      <div>
+        <div style="border-bottom: 1px solid #1d1d1f; width: 300px; margin-bottom: 8px;"></div>
+        <div style="font-size: 12px; font-weight: bold;">Instructor Signature (Dr. Hassan Al Fadhel)</div>
+      </div>
+      <div>
+        <div style="border-bottom: 1px solid #1d1d1f; width: 150px; margin-bottom: 8px;"></div>
+        <div style="font-size: 12px; font-weight: bold;">Date</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const svgSlide = `<svg width="120" height="60" viewBox="0 0 100 40" fill="none" style="transform: rotate(-10deg); filter: drop-shadow(4px 8px 10px rgba(0,0,0,0.15));"><rect width="100" height="30" rx="2" fill="rgba(255,255,255,0.6)" stroke="#cbd5e1" stroke-width="1.5"/><rect width="25" height="30" fill="rgba(255,255,255,0.95)" stroke-right="1px solid #94a3b8"/></svg>`;
+    const svgSpreader = `<svg width="80" height="80" viewBox="0 0 60 60" fill="none" style="transform: rotate(-25deg); filter: drop-shadow(4px 8px 10px rgba(0,0,0,0.15));"><rect x="25" y="0" width="10" height="60" rx="5" fill="rgba(255,255,255,0.8)" stroke="#cbd5e1" stroke-width="2"/><path d="M 28 5 L 32 5" stroke="#fff" stroke-width="3"/></svg>`;
+    
+    const svgDropper = (color) => `<svg width="50" height="180" viewBox="0 0 40 160" fill="none" style="transform: rotate(-15deg); transform-origin: bottom center; filter: drop-shadow(4px 8px 10px rgba(0,0,0,0.15));">
+        <path class="plunger-btn" d="M 12 40 C 2 20 8 2 20 2 C 32 2 38 20 28 40 Z" fill="#64748b"/>
+        <path d="M 14 38 L 26 38 L 22 150 L 18 150 Z" fill="rgba(255,255,255,0.6)" stroke="#cbd5e1" stroke-width="1.5"/>
+        <path d="M 16 42 L 20 42 L 19 140 L 18 140 Z" fill="rgba(255,255,255,0.8)"/>
+        <path d="M 15 90 L 25 90 L 21 145 L 19 145 Z" fill="${color}" opacity="0.9"/>
+        <circle cx="20" cy="155" r="4" fill="${color}" class="anim-drop opacity-0"/>
+    </svg>`;
+
+    const UI = {
+      toast: (msg, type = 'info') => {
+        const container = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        const bg = type === 'error' ? 'bg-[#ff3b30]' : type === 'success' ? 'bg-[#34c759]' : 'bg-[#0071e3]';
+        toast.className = `px-5 py-3 mt-2 rounded-xl text-white text-[14px] font-bold shadow-xl transition-opacity duration-300 opacity-0 ${bg}`;
+        toast.innerHTML = `<i class="fa-solid ${type === 'error' ? 'fa-triangle-exclamation' : type === 'success' ? 'fa-check-circle' : 'fa-info-circle'} mr-2"></i> ${msg}`;
+        container.appendChild(toast);
+        requestAnimationFrame(() => toast.classList.remove('opacity-0'));
+        setTimeout(() => { toast.classList.add('opacity-0'); setTimeout(() => toast.remove(), 300); }, 3500);
+      }
+    };
+
+    const TARGETS = {
+      p1: { name: "Healthy Control", sequence: ['neutrophil', 'lymphocyte', 'monocyte', 'eosinophil', 'basophil'] }, 
+      p2: { name: "Patient Case X", sequence: ['eosinophil', 'neutrophil', 'eosinophil'] }, 
+      u1: { name: "Patient A", sequence: ['neutrophil'], expected: 'neutrophil' }, 
+      u2: { name: "Patient B", sequence: ['lymphocyte'], expected: 'lymphocyte' } 
+    };
+
+    const ftElement = document.getElementById('cursor-item');
+    let appState = { 
+        isBusy: false, phase: 1, subPhase: 'p1', stuName: '', stuId: '', quizScore: 0, quizAnswers: {}, 
+        guided: { prepDone: false, idDone: false, completedSteps: new Set(), identifiedWBCs: [] }, 
+        u1: { prepDone: false, idDone: false, prepMethodCorrect: false, idAnsCorrect: false, idSub: null }, 
+        u2: { prepDone: false, idDone: false, prepMethodCorrect: false, idAnsCorrect: false, idSub: null } 
+    };
+    
+    let bench = { tool: null, isDrying: false, s: { present: false, blood: false, spread: false, dry: false, stain: false, buffer: false, wash: false } };
+    let micro = { mag: 10, focusC: 10, focusF: 85, oil: false, currentTargetIndex: 0 };
+    let wbcNodes = [];
+    let rbcData = [];
+
+    const STEPS = [
+      { id: 1, msg: "Equip 'Clean Slide' and place it onto the Staining Tray." },
+      { id: 2, msg: "Equip 'Patient Blood' and dispense a small drop near the frosted edge." },
+      { id: 3, msg: "Equip 'Spreader' and swipe the slide at a 45-degree angle to create a feathered smear." },
+      { id: 4, msg: "Click 'Air Dry Smear'. Wait for it to completely dry." },
+      { id: 5, msg: "Equip 'Wright's Stain' and flood the slide." },
+      { id: 6, msg: "Equip 'Buffer' and add to the stain to initiate ionization." },
+      { id: 7, msg: "Equip 'DI Water' and gently rinse the slide." },
+      { id: 8, msg: "Switch to 'Microscopic Eval' tab to examine the smear." },
+      { id: 9, msg: "Apply Immersion Oil and focus using the 100x lens." },
+      { id: 10, msg: "Identify the centered leukocyte. Drag stage to scan for remaining targets." }
+    ];
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') { clearHand(); }
+    });
+
+    window.toggleGuide = function() {
+        const guide = document.getElementById('morph-guide');
+        if(guide.classList.contains('hidden')) {
+            guide.classList.remove('hidden');
+            guide.classList.add('flex');
+        } else {
+            guide.classList.add('hidden');
+            guide.classList.remove('flex');
+        }
+    }
+
+    window.completeStep = function(stepId) {
+        if(!appState.subPhase.startsWith('p')) return;
+        appState.guided.completedSteps.add(stepId);
+        
+        let nextStep = STEPS.find(s => !appState.guided.completedSteps.has(s.id));
+        if(nextStep) {
+            document.getElementById('guide-step-num').textContent = nextStep.id;
+            document.getElementById('guide-step-text').textContent = nextStep.msg;
+        } else {
+            document.getElementById('guide-step-num').textContent = "✓";
+            document.getElementById('guide-step-text').textContent = "Protocol Complete.";
+        }
+        
+        const bar = document.getElementById('guided-bar');
+        bar.classList.remove('fade-in'); void bar.offsetWidth; bar.classList.add('fade-in');
+    };
+
+    let simTimer = null;
+    function runRealTimer(seconds, label, callback) {
+        appState.isBusy = true;
+        let current = seconds;
+        const tCon = document.getElementById('sim-timer-container');
+        const tTxt = document.getElementById('sim-timer-text');
+        tCon.classList.remove('hidden');
+        tTxt.textContent = `${label}: ${current}s`;
+
+        simTimer = setInterval(() => {
+            current--;
+            tTxt.textContent = `${label}: ${current}s`;
+            if (current <= 0) {
+                clearInterval(simTimer);
+                tCon.classList.add('hidden');
+                appState.isBusy = false;
+                if(callback) callback();
+            }
+        }, 1000);
+    }
+    
+    function runFastTimer(targetSeconds, label, callback) {
+        appState.isBusy = true;
+        let current = 0;
+        const step = Math.ceil(targetSeconds / 10);
+        const tCon = document.getElementById('sim-timer-container');
+        const tTxt = document.getElementById('sim-timer-text');
+        tCon.classList.remove('hidden');
+        
+        simTimer = setInterval(() => {
+            current += step;
+            if(current > targetSeconds) current = targetSeconds;
+            tTxt.textContent = `${label}: ${current}s`;
+            if (current >= targetSeconds) {
+                clearInterval(simTimer);
+                setTimeout(() => {
+                    tCon.classList.add('hidden');
+                    appState.isBusy = false;
+                    if(callback) callback();
+                }, 300);
+            }
+        }, 100);
+    }
+
+    window.equip = function(item) {
+        if(appState.isBusy) return;
+        clearHand();
+        bench.tool = item;
+
+        document.querySelectorAll('.equip-btn').forEach(b => b.classList.remove('active-tool'));
+        document.querySelector(`[data-id="${item}"]`)?.classList.add('active-tool');
+        
+        document.getElementById('label-hand').innerHTML = item.toUpperCase();
+        ftElement.style.display = 'block';
+
+        if(item==='slide') ftElement.innerHTML = svgSlide; 
+        else if(item==='spreader') ftElement.innerHTML = svgSpreader; 
+        else if(item==='blood') ftElement.innerHTML = svgDropper('#b91c1c'); 
+        else if(item==='stain') ftElement.innerHTML = svgDropper('#312e81'); 
+        else if(item==='buffer') ftElement.innerHTML = svgDropper('#dbeafe'); 
+        else if(item==='water') ftElement.innerHTML = svgDropper('#32ade6'); 
+
+        if(item==='slide' && !bench.s.present) document.getElementById('staining-tray').classList.add('drop-target-active'); 
+        else document.getElementById('staining-tray').classList.remove('drop-target-active');
+    };
+
+    window.clearHand = function() {
+        if(appState.isBusy) return;
+        bench.tool = null; document.getElementById('label-hand').innerHTML = 'Empty'; 
+        document.querySelectorAll('.equip-btn').forEach(b => b.classList.remove('active-tool'));
+        ftElement.style.display = 'none'; document.getElementById('staining-tray').classList.remove('drop-target-active');
+    };
+
+    window.airDry = function() {
+        if(appState.isBusy) return;
+        if(bench.s.spread && !bench.s.dry && !bench.isDrying) { 
+            bench.isDrying = true;
+            document.getElementById('label-smear').textContent='Air Drying...';
+            runRealTimer(3, "Air Dry", () => {
+                bench.s.dry = true; 
+                bench.isDrying = false;
+                document.getElementById('label-smear').textContent='Dry Smear'; 
+                completeStep(4);
+            });
+        }
+    };
+
+    window.clickTray = function() {
+        if(appState.isBusy) return;
+        
+        if(bench.tool === null && bench.s.present) {
+            equip('slide');
+            document.getElementById('slide-station').classList.add('hidden'); document.getElementById('slide-station').classList.remove('flex');
+            document.getElementById('label-smear').textContent = 'Slide in Hand';
+            return;
+        }
+
+        if(bench.tool === 'slide') {
+            bench.s.present=true; document.getElementById('slide-station').classList.remove('hidden'); document.getElementById('slide-station').classList.add('flex'); clearHand(); 
+            
+            if(bench.s.wash) document.getElementById('label-smear').textContent = 'Stained Smear';
+            else if(bench.s.dry) document.getElementById('label-smear').textContent = 'Dry Smear';
+            else if(bench.s.spread) document.getElementById('label-smear').textContent = 'Wet Smear';
+            else if(bench.s.blood) document.getElementById('label-smear').textContent = 'Blood Drop';
+            else document.getElementById('label-smear').textContent = 'Clean Glass';
+            
+            completeStep(1);
+            return;
+        }
+
+        if(!bench.s.present) { UI.toast("Place slide on rack first.", "error"); return; }
+
+        if(bench.tool === 'blood') { 
+            animDropper(); 
+            bench.s.blood=true; 
+            document.getElementById('slide-blood-drop').style.opacity='1'; 
+            document.getElementById('label-smear').textContent='Blood Added'; 
+            completeStep(2);
+        }
+        else if(bench.tool === 'spreader') { 
+            if(!bench.s.blood) { UI.toast("Add blood first.", "error"); return; }
+            bench.s.spread=true; 
+            document.getElementById('slide-blood-drop').style.opacity='0'; 
+            
+            const smearLayer = document.getElementById('slide-smear-layer');
+            smearLayer.classList.remove('smear-active'); void smearLayer.offsetWidth; smearLayer.classList.add('smear-active');
+            
+            document.getElementById('label-smear').textContent='Smear Extended';
+            completeStep(3);
+        }
+        else if(bench.tool === 'stain') {
+            if(!bench.s.dry) { UI.toast("Air dry smear completely first!", "error"); return; }
+            animDropper(); 
+            runFastTimer(180, "Staining", () => {
+                bench.s.stain=true; 
+                document.getElementById('slide-stain-layer').style.opacity='0.9'; 
+                completeStep(5);
+            });
+        }
+        else if(bench.tool === 'buffer') {
+            if(!bench.s.stain) { UI.toast("Apply Wright's Stain first.", "error"); return; }
+            animDropper(); 
+            runFastTimer(180, "Buffering", () => {
+                bench.s.buffer=true; 
+                document.getElementById('slide-stain-layer').style.backgroundColor='#4c1d95'; 
+                completeStep(6);
+            });
+        }
+        else if(bench.tool === 'water') { 
+            if(!bench.s.buffer) { UI.toast("Must buffer stain first for proper cellular uptake.", "error"); return; }
+            animDropper(); 
+            document.getElementById('slide-wash-cascade').classList.remove('hidden'); 
+            document.getElementById('slide-wash-cascade').classList.add('water-cascade'); 
+            runRealTimer(2, "Washing", () => {
+                document.getElementById('slide-wash-cascade').classList.remove('water-cascade'); 
+                document.getElementById('slide-wash-cascade').classList.add('hidden'); 
+                document.getElementById('slide-stain-layer').style.opacity='0.2'; 
+                bench.s.wash=true; 
+                
+                let isUnknown = !appState.subPhase.startsWith('p');
+                if(isUnknown) {
+                    appState[appState.subPhase].prepMethodCorrect = true;
+                    appState[appState.subPhase].prepDone = true;
+                    UI.toast("Smear Preparation Complete.", "success");
+                } else {
+                    appState.guided.prepDone = true;
+                    UI.toast("Smear Preparation Complete.", "success");
+                }
+                document.getElementById('label-smear').textContent = 'Stained Smear';
+                document.getElementById('label-smear').className = 'text-[#34c759] font-mono font-bold ml-1';
+                completeStep(7); 
+            });
+        }
+    };
+
+    window.applyOil = function() {
+        if(appState.isBusy) return;
+        micro.oil = true; document.getElementById('oil-status-badge').className="font-mono text-[#34c759] font-bold text-[10px] bg-[#34c759]/10 px-2 py-1 rounded"; document.getElementById('oil-status-badge').textContent="Oil Applied"; renderScope(); 
+    };
+
+    function handleCursorMove(e) {
+      if(ftElement.style.display === 'block') {
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        let offsetX = 0, offsetY = 0; 
+        const t = bench.tool;
+        if (t === 'slide') { offsetX = -40; offsetY = -20; }
+        else if (t === 'spreader') { offsetX = -10; offsetY = -60; }
+        else if (t === 'blood' || t === 'stain' || t === 'buffer' || t === 'water') { offsetX = -16; offsetY = -105; }
+
+        ftElement.style.left = (clientX + offsetX) + 'px'; ftElement.style.top = (clientY + offsetY) + 'px';
+      }
+    }
+    document.addEventListener('mousemove', handleCursorMove);
+    document.addEventListener('touchmove', handleCursorMove, {passive: true});
+
+    function animDropper() {
+      const p = ftElement.querySelector('.plunger-btn'); const drop = ftElement.querySelector('.anim-drop');
+      if(p) { p.style.transform = 'translateY(6px)'; p.style.transition = 'transform 0.1s ease'; setTimeout(() => p.style.transform = 'none', 150); }
+      if(drop) { drop.classList.remove('anim-drop'); void drop.offsetWidth; drop.classList.add('anim-drop'); }
+    }
+
+    // --- MICROSCOPE ENGINE ---
+    let stageX = 0, stageY = 0, isDrag = false, lastM = {x:0, y:0};
+
+    function initMicroscopeData() {
+      wbcNodes = [];
+      const tgt = TARGETS[appState.subPhase];
+      tgt.sequence.forEach((type, index) => {
+          wbcNodes.push({
+              type: type,
+              cx: (index * 120) - ((tgt.sequence.length * 120) / 2) + 60,
+              cy: (Math.random() * 80) - 40,
+              rot: Math.random() * Math.PI
+          });
+      });
+      micro.currentTargetIndex = 0;
+
+      // Pure organic scatter matrix for RBCs
+      rbcData = [];
+      for(let i=0; i<800; i++) {
+          rbcData.push({
+              x: (Math.random() - 0.5) * 1600,
+              y: (Math.random() - 0.5) * 1600,
+              r: 5.5 + Math.random() * 1.5,
+              opacity: 0.15 + Math.random() * 0.2
+          });
+      }
+    }
+
+    window.startDrag = function(e) { 
+        isDrag = true; 
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        lastM = {x:clientX, y:clientY}; 
+    };
+    
+    window.dragStage = function(e) { 
+        if(!isDrag) return; 
+        if(e.cancelable) e.preventDefault();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        stageX += (clientX - lastM.x); 
+        stageY += (clientY - lastM.y); 
+        lastM = {x:clientX, y:clientY}; 
+        renderScope(); 
+    };
+    
+    window.stopDrag = function() { isDrag = false; };
+    
+    const scopeCanvas = document.getElementById('microscope-canvas');
+    scopeCanvas.addEventListener('mousedown', startDrag);
+    scopeCanvas.addEventListener('mousemove', dragStage);
+    scopeCanvas.addEventListener('mouseup', stopDrag);
+    scopeCanvas.addEventListener('mouseleave', stopDrag);
+    scopeCanvas.addEventListener('touchstart', startDrag, {passive: false});
+    scopeCanvas.addEventListener('touchmove', dragStage, {passive: false});
+    scopeCanvas.addEventListener('touchend', stopDrag);
+
+    window.setLens = function(mag) {
+      micro.mag = mag;
+      document.querySelectorAll('.lens-btn').forEach(b => {
+        b.className = `lens-btn flex-1 py-2 text-[12px] font-bold rounded-lg transition ${parseInt(b.dataset.mag) === micro.mag ? 'bg-white text-apple-text shadow-sm border border-gray-300' : 'text-[#86868b] hover:text-apple-text border border-transparent'}`;
+      });
+      renderScope();
+    };
+
+    document.getElementById('micro-coarse-slider').addEventListener('input', (e) => { micro.focusC = parseInt(e.target.value); renderScope(); });
+    document.getElementById('micro-fine-slider').addEventListener('input', (e) => { micro.focusF = parseInt(e.target.value); renderScope(); });
+
+    function drawWBC(ctx, type, mag) {
+        ctx.save();
+        if(mag < 40) {
+            ctx.fillStyle = '#6b21a8'; ctx.beginPath(); ctx.arc(0,0, 6, 0, Math.PI*2); ctx.fill();
+            ctx.restore();
+            return;
+        }
+
+        if(type === 'neutrophil') {
+            let cyto = ctx.createRadialGradient(0,0,2, 0,0,15);
+            cyto.addColorStop(0, '#fbcfe8'); cyto.addColorStop(1, '#f9a8d4');
+            ctx.fillStyle = cyto;
+            ctx.beginPath(); ctx.arc(0,0, 14, 0, Math.PI*2); ctx.fill();
+            
+            ctx.fillStyle = '#9d174d';
+            for(let i=0; i<80; i++) { ctx.beginPath(); ctx.arc((Math.random()*24)-12, (Math.random()*24)-12, 0.4, 0, Math.PI*2); ctx.fill(); }
+            
+            ctx.fillStyle = '#4c1d95';
+            ctx.beginPath(); ctx.ellipse(-5, -4, 4, 3, Math.PI/4, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.ellipse(5, -2, 4, 3, -Math.PI/6, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.ellipse(0, 5, 5, 3.5, 0, 0, Math.PI*2); ctx.fill();
+            ctx.strokeStyle = '#4c1d95'; ctx.lineWidth = 1.2;
+            ctx.beginPath(); ctx.moveTo(-5,-4); ctx.quadraticCurveTo(0,-5, 5,-2); ctx.quadraticCurveTo(4,2, 0,5); ctx.stroke();
+        } 
+        else if (type === 'eosinophil') {
+            ctx.fillStyle = '#fee2e2'; 
+            ctx.beginPath(); ctx.arc(0,0, 15, 0, Math.PI*2); ctx.fill();
+            
+            ctx.fillStyle = '#ef4444';
+            for(let i=0; i<65; i++) { 
+                let r = Math.random()*13.5; let th = Math.random()*Math.PI*2;
+                ctx.beginPath(); ctx.arc(r*Math.cos(th), r*Math.sin(th), 1.2, 0, Math.PI*2); ctx.fill(); 
+            }
+            
+            ctx.fillStyle = '#4c1d95';
+            ctx.beginPath(); ctx.ellipse(-6, 0, 6, 4.5, Math.PI/3, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.ellipse(6, 0, 6, 4.5, -Math.PI/3, 0, Math.PI*2); ctx.fill();
+            ctx.strokeStyle = '#4c1d95'; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.moveTo(-6,0); ctx.quadraticCurveTo(0,2, 6,0); ctx.stroke();
+        }
+        else if (type === 'basophil') {
+            ctx.fillStyle = '#f3e8ff'; 
+            ctx.beginPath(); ctx.arc(0,0, 13, 0, Math.PI*2); ctx.fill();
+            
+            ctx.fillStyle = '#4c1d95'; ctx.beginPath(); ctx.arc(0,0, 6, 0, Math.PI*2); ctx.fill();
+            
+            ctx.fillStyle = '#1e1b4b';
+            for(let i=0; i<55; i++) { 
+                let r = Math.random()*12; let th = Math.random()*Math.PI*2;
+                ctx.beginPath(); ctx.arc(r*Math.cos(th), r*Math.sin(th), 2, 0, Math.PI*2); ctx.fill(); 
+            }
+        }
+        else if (type === 'lymphocyte') {
+            ctx.fillStyle = '#bae6fd'; 
+            ctx.beginPath(); ctx.arc(0,0, 10, 0, Math.PI*2); ctx.fill();
+            
+            ctx.fillStyle = '#312e81';
+            ctx.beginPath(); ctx.arc(1, -0.5, 8.5, 0, Math.PI*2); ctx.fill();
+        }
+        else if (type === 'monocyte') {
+            ctx.fillStyle = '#cbd5e1'; 
+            ctx.beginPath(); ctx.arc(0,0, 18, 0, Math.PI*2); ctx.fill();
+            
+            ctx.fillStyle = '#f8fafc';
+            ctx.beginPath(); ctx.arc(9, -7, 2.5, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(12, 3, 1.8, 0, Math.PI*2); ctx.fill();
+            
+            ctx.fillStyle = '#4c1d95';
+            ctx.beginPath();
+            ctx.moveTo(-8, -8);
+            ctx.bezierCurveTo(-2, -10, 3, -12, 5, -5);
+            ctx.bezierCurveTo(7, 0, -2, 2, -1, 6);
+            ctx.bezierCurveTo(0, 10, -5, 12, -9, 8);
+            ctx.bezierCurveTo(-14, 2, -15, -4, -8, -8);
+            ctx.fill();
+        }
+        ctx.restore();
+    }
+
+    function renderScope() {
+      if(appState.subPhase.startsWith('p')) completeStep(8);
+      const ctx = document.getElementById('microscope-canvas').getContext('2d'); ctx.clearRect(0,0,550,550);
+      const s = bench.s; const fb = document.getElementById('micro-result-eval'); const sub = document.getElementById('scope-submit-area');
+      let isUnknown = !appState.subPhase.startsWith('p');
+
+      if(!s.present || !s.wash) { 
+          if(!isUnknown) {
+              fb.classList.remove('hidden'); fb.className="mt-6 w-full max-w-lg p-5 rounded-xl border border-gray-200 bg-[#f5f5f7] text-[#86868b] text-[14px]"; fb.innerHTML = "Smear not properly prepared or stained. Complete bench protocol."; return; 
+          }
+      }
+
+      // Forgiving focus logic for scanning
+      let baseDev = Math.abs(micro.focusC - 50) * 0.8 + Math.abs(micro.focusF - 50) * 0.15;
+      let blurAmt = 0;
+      if (micro.mag === 10) blurAmt = baseDev * 0.05; 
+      else if (micro.mag === 40) blurAmt = baseDev * 0.15;
+      else blurAmt = baseDev; 
+
+      if(micro.mag === 100 && !micro.oil) blurAmt += 8; 
+      if(micro.mag < 100 && micro.oil) blurAmt += 4;
+      
+      document.getElementById('microscope-canvas').style.filter = `blur(${blurAmt.toFixed(1)}px)`;
+      ctx.fillStyle = '#fdf2f8'; 
+      ctx.fillRect(0,0,550,550);
+
+      let visualScale = micro.mag === 10 ? 0.3 : (micro.mag === 40 ? 0.8 : 2.5);
+      ctx.save(); ctx.translate(275, 275); ctx.scale(visualScale, visualScale); ctx.translate(stageX, stageY);
+
+      // Render Organic RBC Scatter
+      rbcData.forEach(rbc => {
+          const viewX = 275 + (rbc.x + stageX) * visualScale;
+          const viewY = 275 + (rbc.y + stageY) * visualScale;
+          if(viewX < -50 || viewX > 600 || viewY < -50 || viewY > 600) return;
+          
+          let grad = ctx.createRadialGradient(rbc.x, rbc.y, rbc.r*0.2, rbc.x, rbc.y, rbc.r);
+          grad.addColorStop(0, `rgba(244, 114, 182, ${rbc.opacity*0.2})`); 
+          grad.addColorStop(0.6, `rgba(225, 29, 72, ${rbc.opacity*0.7})`);
+          grad.addColorStop(1, `rgba(159, 18, 57, ${rbc.opacity})`);
+          ctx.fillStyle = grad;
+          ctx.beginPath(); ctx.arc(rbc.x, rbc.y, rbc.r, 0, Math.PI*2); ctx.fill();
+      });
+
+      let closestWBC = null;
+      let minDst = 9999;
+
+      wbcNodes.forEach((b, index) => {
+        const viewX = 275 + (b.cx + stageX) * visualScale;
+        const viewY = 275 + (b.cy + stageY) * visualScale;
+        
+        let dst = Math.sqrt(Math.pow(275 - viewX, 2) + Math.pow(275 - viewY, 2));
+        if(dst < minDst) { minDst = dst; closestWBC = index; }
+
+        if(viewX < -50 || viewX > 600 || viewY < -50 || viewY > 600) return;
+        ctx.save(); ctx.translate(b.cx, b.cy); ctx.rotate(b.rot);
+        drawWBC(ctx, b.type, micro.mag);
+        ctx.restore();
+      });
+      ctx.restore();
+
+      micro.currentTargetIndex = closestWBC;
+
+      if(micro.mag === 100 && micro.oil && blurAmt < 3.0 && closestWBC !== null) { 
+        if(!isUnknown) completeStep(9);
+        
+        let previouslyFound = appState.guided.identifiedWBCs.includes(closestWBC);
+        
+        if (previouslyFound && !isUnknown) {
+            fb.classList.remove('hidden');
+            fb.className = "mt-6 p-4 rounded-xl bg-[#f5f5f7] border border-gray-200 text-apple-sec text-[13px] shadow-sm flex-col";
+            fb.innerHTML = `<strong>Identified Cell.</strong> You have already logged this ${wbcNodes[closestWBC].type}. Drag stage to scan for others.`;
+            sub.classList.add('hidden');
+        } else {
+            fb.classList.add('hidden');
+            sub.classList.remove('hidden');
+            
+            document.querySelectorAll('input[name="wbc-type"]').forEach(r => r.checked = false);
+            const btnLog = document.getElementById('btn-wbc-log');
+            btnLog.textContent = "Submit Identification"; btnLog.disabled = false;
+            btnLog.classList.remove('bg-[#34c759]'); btnLog.classList.add('bg-[#0071e3]', 'hover:bg-[#0077ed]');
+        }
+      } else { 
+        fb.classList.add('hidden'); sub.classList.add('hidden'); 
+      }
+    }
+
+    window.verifyWBC = function() {
+        const checkedEl = document.querySelector('input[name="wbc-type"]:checked');
+        if(!checkedEl) { UI.toast("Select a cell type first.", "error"); return; }
+        const ans = checkedEl.value;
+
+        let isUnknown = !appState.subPhase.startsWith('p');
+        const currentTargetType = wbcNodes[micro.currentTargetIndex].type;
+        const fb = document.getElementById('micro-result-eval'); 
+
+        if(isUnknown) {
+            appState[appState.subPhase].idAnsCorrect = (ans === currentTargetType);
+            appState[appState.subPhase].idDone = true;
+            appState[appState.subPhase].idSub = ans;
+
+            const btn = document.getElementById('btn-wbc-log');
+            btn.textContent = "Findings Logged"; btn.disabled = true;
+            btn.classList.remove('bg-[#0071e3]', 'hover:bg-[#0077ed]'); btn.classList.add('bg-[#34c759]');
+
+            UI.toast("Differential Findings Logged.", "success");
+            fb.classList.remove('hidden');
+            fb.className = "mt-4 p-4 rounded-xl bg-[#f0f9ff] border border-[#bae6fd] text-[#0071e3] text-[13px] shadow-sm flex-col";
+            fb.innerHTML = `<strong>Differential Logged.</strong><br> <button onclick="checkPhaseCompletion()" class="mt-3 w-full bg-[#0071e3] text-white py-2.5 rounded-lg font-bold hover:bg-[#0077ed] transition">Proceed to Next Step <i class="fa-solid fa-arrow-right"></i></button>`;
+
+        } else {
+            fb.classList.remove('hidden');
+            if(ans === currentTargetType) {
+                
+                let explanation = "";
+                if(ans === 'neutrophil') explanation = "Note the lobulated nucleus (2-5 lobes) and pink cytoplasm with fine granules.";
+                if(ans === 'eosinophil') explanation = "Bi-lobed nucleus with large red/orange granules.";
+                if(ans === 'basophil') explanation = "Large deeply staining basophilic granules overlying the nucleus.";
+                if(ans === 'lymphocyte') explanation = "Scanty rim of light blue cytoplasm and large round nucleus.";
+                if(ans === 'monocyte') explanation = "Large cell, kidney-shaped nucleus, and grey-blue cytoplasm.";
+                
+                if(!appState.guided.identifiedWBCs.includes(micro.currentTargetIndex)) {
+                    appState.guided.identifiedWBCs.push(micro.currentTargetIndex);
+                    const counter = document.getElementById('target-counter');
+                    counter.textContent = `Identified: ${appState.guided.identifiedWBCs.length}/${TARGETS[appState.subPhase].sequence.length}`;
+                    counter.classList.add('scale-110', 'bg-[#34c759]');
+                    setTimeout(() => counter.classList.remove('scale-110', 'bg-[#34c759]'), 300);
+                }
+
+                if(appState.guided.identifiedWBCs.length === TARGETS[appState.subPhase].sequence.length) {
+                    appState.guided.idDone = true;
+                    completeStep(10);
+                    fb.className = "mt-4 p-4 rounded-xl bg-[#f0fdf4] border border-[#bbf7d0] text-[#166534] text-[13px] shadow-sm flex-col"; 
+                    fb.innerHTML = `<strong>Correct Identification!</strong><br>${explanation}<br><button onclick="checkPhaseCompletion()" class="mt-4 w-full bg-[#166534] hover:bg-[#15803d] text-white py-3 rounded-lg font-bold transition">Complete Module <i class="fa-solid fa-arrow-right"></i></button>`;
+                } else {
+                    fb.className = "mt-4 p-4 rounded-xl bg-[#f0fdf4] border border-[#bbf7d0] text-[#166534] text-[13px] shadow-sm flex-col"; 
+                    fb.innerHTML = `<strong>Correct Identification!</strong><br>${explanation}<div class="mt-3 pt-2 border-t border-[#bbf7d0] text-[11px] font-bold text-center">Drag the stage to scan for the remaining targets.</div>`;
+                }
+                
+                const btn = document.getElementById('btn-wbc-log');
+                btn.textContent = "Verified"; btn.disabled = true;
+                btn.classList.remove('bg-[#0071e3]', 'hover:bg-[#0077ed]'); btn.classList.add('bg-[#34c759]');
+                
+            } else {
+                fb.className = "mt-4 p-4 rounded-xl bg-[#fef2f2] border border-[#fecaca] text-[#991b1b] text-[13px] shadow-sm flex-col"; 
+                fb.innerHTML = `<strong>Incorrect.</strong> Check the Morphology Guide for reference.`; 
+            }
+        }
+    };
+
+    window.startPracticePhase = function(id) {
+        document.getElementById('protocol-modal').classList.add('hidden');
+        document.getElementById('protocol-modal').classList.remove('flex');
+        appState.subPhase = id;
+        resetBench(id);
+        setPhase(1); 
+        const appWrap = document.getElementById('app-wrapper');
+        appWrap.classList.remove('hidden'); appWrap.classList.add('flex');
+        setTimeout(() => appWrap.style.opacity = '1', 10);
+    };
+
+    window.startExamPrompt = function() {
+        document.getElementById('protocol-modal').classList.add('hidden'); document.getElementById('protocol-modal').classList.remove('flex');
+        document.getElementById('briefing-modal').classList.remove('hidden'); document.getElementById('briefing-modal').classList.add('flex');
+    };
+
+    window.showBenchTab = function(tab) {
+      if(appState.subPhase.startsWith('p') && tab === 'scope') completeStep(8);
+      clearHand();
+      document.querySelectorAll('.bench-view').forEach(el => el.classList.replace('flex', 'hidden'));
+      document.getElementById(`view-${tab}`).classList.replace('hidden', 'flex');
+      ['smear', 'scope'].forEach(t => {
+        const btn = document.getElementById(`tab-${t}`);
+        btn.className = `flex-1 py-2.5 px-3 rounded-[10px] text-[13px] transition-all flex items-center justify-center ${t === tab ? 'font-semibold bg-white text-apple-text shadow-sm' : 'font-medium text-[#86868b] hover:text-apple-text'}`;
+      });
+      if(tab === 'scope') { renderScope(); }
+    };
+
+    window.setPhase = function(p) {
+      appState.phase = p;
+      [1,2,3,4].forEach(n => { document.getElementById(`nav-${n}`).className = `px-4 py-2 rounded-full text-[11px] font-bold transition ${p === n ? 'bg-[#0071e3] text-white shadow-sm' : 'bg-[#e5e5ea] text-[#86868b]'}`; });
+
+      ['module-bench', 'module-quiz', 'module-unknowns-hub', 'module-report'].forEach(id => {
+          document.getElementById(id).classList.add('hidden'); document.getElementById(id).classList.remove('flex', 'block');
+      });
+
+      if (p === 1 || p === 3) {
+          document.getElementById('guided-bar').style.display = (p === 1) ? 'block' : 'none';
+          if(p === 3 && appState.subPhase === 'hub') {
+              document.getElementById('module-unknowns-hub').classList.remove('hidden'); document.getElementById('module-unknowns-hub').classList.add('flex');
+          } else {
+              document.getElementById('module-bench').classList.remove('hidden'); document.getElementById('module-bench').classList.add('flex');
+          }
+      } 
+      else if (p === 2) {
+          document.getElementById('guided-bar').style.display = 'none';
+          document.getElementById('module-quiz').classList.remove('hidden'); document.getElementById('module-quiz').classList.add('flex');
+      } 
+      else if (p === 4) {
+          document.getElementById('guided-bar').style.display = 'none';
+          document.getElementById('module-report').classList.remove('hidden'); document.getElementById('module-report').classList.add('block');
+          generateReportData();
+      }
+    };
+
+    window.loginStudent = function() {
+      const n = document.getElementById('stu-name').value; const i = document.getElementById('stu-id').value;
+      if(!n || !i) { UI.toast("Credentials required.", "error"); return; }
+      appState.stuName = n; appState.stuId = i;
+
+      document.getElementById('briefing-modal').classList.add('hidden'); document.getElementById('briefing-modal').classList.remove('flex');
+      const appWrap = document.getElementById('app-wrapper');
+      appWrap.classList.remove('hidden'); appWrap.classList.add('flex'); appWrap.style.opacity = '1';
+      setPhase(2);
+    };
+
+    window.submitQuiz = function() {
+      let c = 0; appState.quizAnswers = {};
+      const getAns = (q) => { const val = document.querySelector(`input[name="${q}"]:checked`)?.value; appState.quizAnswers[q] = val || 'unanswered'; return val; };
+
+      if(getAns('q1') === 'b') c++; if(getAns('q2') === 'a') c++; if(getAns('q3') === 'b') c++;
+      if(getAns('q4') === 'a') c++; if(getAns('q5') === 'a') c++; if(getAns('q6') === 'b') c++;
+      
+      appState.quizScore = Math.round((c/6)*100); appState.subPhase = 'hub'; setPhase(3);
+    };
+
+    window.startUnknown = function(id) {
+      appState.subPhase = id; resetBench(id);
+      document.getElementById('module-unknowns-hub').classList.add('hidden'); document.getElementById('module-unknowns-hub').classList.remove('flex');
+      document.getElementById('module-bench').classList.remove('hidden'); document.getElementById('module-bench').classList.add('flex');
+      showBenchTab('smear');
+    };
+
+    window.checkPhaseCompletion = function() {
+        const cModal = document.getElementById('completion-modal');
+        const cTitle = document.getElementById('comp-modal-title');
+        const cDesc = document.getElementById('comp-modal-desc');
+        const cActions = document.getElementById('comp-modal-actions');
+
+        if(appState.subPhase.startsWith('p')) {
+            if(appState.guided.prepDone && appState.guided.idDone) {
+                cTitle.textContent = "Bench Practice Complete";
+                cDesc.textContent = "You have successfully completed the peripheral blood smear and identified all target leukocytes.";
+                cActions.innerHTML = `
+                    <button onclick="document.getElementById('completion-modal').classList.add('hidden'); returnToGuidedSelection();" class="w-full bg-white border border-[#0071e3] text-[#0071e3] hover:bg-[#f0f9ff] py-3.5 rounded-full text-[14px] font-bold shadow-sm transition">Practice Another Sample</button>
+                    <button onclick="document.getElementById('completion-modal').classList.add('hidden'); startExamPrompt();" class="apple-btn w-full py-3.5 text-[14px] shadow-sm flex items-center gap-2">Proceed to Assessment <i class="fa-solid fa-arrow-right"></i></button>
+                `;
+                cModal.classList.remove('hidden'); cModal.classList.add('flex');
+            }
+        } else {
+            const cur = appState[appState.subPhase];
+            if(cur.prepDone && cur.idDone) {
+                if(appState.subPhase === 'u1') {
+                    cTitle.textContent = "Patient A Complete";
+                    cDesc.textContent = "Results logged. Proceed to the next patient case.";
+                    cActions.innerHTML = `<button onclick="document.getElementById('completion-modal').classList.add('hidden'); appState.subPhase = 'hub'; document.getElementById('btn-u2').disabled = false; document.getElementById('btn-u2').className = 'apple-btn px-6 py-3.5 flex items-center justify-center gap-2 text-[14px] shadow-sm'; startUnknown('u2');" class="apple-btn w-full py-3.5 text-[14px] shadow-sm flex items-center gap-2">Load Patient B <i class="fa-solid fa-arrow-right"></i></button>`;
+                    cModal.classList.remove('hidden'); cModal.classList.add('flex');
+                    
+                } else if(appState.subPhase === 'u2') {
+                    cTitle.textContent = "All Unknowns Complete";
+                    cDesc.textContent = "You have completed the independent practicum.";
+                    cActions.innerHTML = `<button onclick="document.getElementById('completion-modal').classList.add('hidden'); setPhase(4);" class="apple-btn w-full py-3.5 text-[14px] shadow-sm flex items-center gap-2">Submit & Get Report <i class="fa-solid fa-file-pdf"></i></button>`;
+                    cModal.classList.remove('hidden'); cModal.classList.add('flex');
+                }
+            }
+        }
+    }
+
+    window.returnToGuidedSelection = function() {
+        appState.guided = { prepDone: false, idDone: false, completedSteps: new Set(), identifiedWBCs: [] };
+        const appWrap = document.getElementById('app-wrapper');
+        appWrap.style.opacity = '0';
+        setTimeout(() => {
+            appWrap.classList.add('hidden'); appWrap.classList.remove('flex');
+            document.getElementById('protocol-modal').classList.remove('hidden'); document.getElementById('protocol-modal').classList.add('flex');
+        }, 500);
+    };
+
+    window.resetCurrentProtocol = function() {
+      if(appState.isBusy) return;
+      if(appState.phase === 1 || appState.phase === 3) {
+        resetBench(appState.subPhase);
+        UI.toast("Protocol Reset Successfully.", "info");
+      }
+    };
+
+    function resetBench(phaseId) {
+      let isUnknown = !phaseId.startsWith('p');
+      bench = { tool: null, isDrying: false, s: { present: false, blood: false, spread: false, dry: false, stain: false, buffer: false, wash: false } };
+      
+      document.getElementById('completion-modal').classList.add('hidden'); document.getElementById('completion-modal').classList.remove('flex');
+
+      document.getElementById('staining-tray').classList.remove('drop-target-active');
+      document.getElementById('slide-station').classList.add('hidden'); document.getElementById('slide-station').classList.remove('flex');
+      
+      document.getElementById('slide-blood-drop').style.opacity = '0';
+      document.getElementById('slide-smear-layer').classList.remove('smear-active');
+      document.getElementById('slide-stain-layer').style.opacity = '0';
+      document.getElementById('slide-stain-layer').style.backgroundColor = '#312e81';
+      
+      clearHand();
+      document.getElementById('label-smear').textContent = 'None'; document.getElementById('label-smear').className = 'text-[#1d1d1f] font-mono font-bold ml-1';
+      
+      initMicroscopeData();
+      micro = { mag: 10, focusC: 10, focusF: 85, oil: false, currentTargetIndex: 0 };
+      stageX = 0; stageY = 0;
+      document.getElementById('oil-status-badge').className = "font-mono text-[#ff3b30] font-bold text-[10px] bg-[#ff3b30]/10 px-2 py-1 rounded"; document.getElementById('oil-status-badge').textContent = "Dry Lens";
+      document.getElementById('micro-result-eval').classList.add('hidden');
+      document.getElementById('scope-submit-area').classList.add('hidden');
+      document.querySelectorAll('.lens-btn').forEach(b => { b.className = `lens-btn flex-1 py-2 text-[12px] font-bold rounded-lg transition ${parseInt(b.dataset.mag) === 10 ? 'bg-white text-apple-text shadow-sm border border-gray-300' : 'text-[#86868b] hover:text-apple-text border border-transparent'}`; });
+      document.getElementById('micro-coarse-slider').value = 10; document.getElementById('micro-fine-slider').value = 85;
+
+      document.querySelectorAll('input[name="wbc-type"]').forEach(r => r.checked = false);
+      document.querySelectorAll('input[name="wbc-type"]').forEach(r => r.disabled = false);
+      const btnLog = document.getElementById('btn-wbc-log');
+      btnLog.textContent = "Submit Identification"; btnLog.disabled = false;
+      btnLog.classList.remove('bg-[#34c759]'); btnLog.classList.add('bg-[#0071e3]', 'hover:bg-[#0077ed]');
+      
+      document.getElementById('target-counter').textContent = `Identified: 0/${TARGETS[phaseId].sequence.length}`;
+      document.getElementById('target-counter').className = "text-[14px] font-mono font-bold text-white bg-[#0071e3] px-4 py-2 rounded-full shadow-md transition-transform duration-300";
+      
+      document.getElementById('morph-guide').classList.add('hidden');
+      document.getElementById('morph-guide').classList.remove('flex');
+
+      appState.guided.completedSteps.clear();
+      appState.guided.identifiedWBCs = [];
+      
+      if(!isUnknown) { 
+        document.getElementById('guide-step-num').textContent = STEPS[0].id; 
+        document.getElementById('guide-step-text').textContent = STEPS[0].msg;
+      }
+    }
+
+    function generateReportData() {
+      document.getElementById('rep-name-out').textContent = appState.stuName; document.getElementById('rep-id-out').textContent = appState.stuId;
+      document.getElementById('rep-quiz-out').textContent = appState.quizScore + "%";
+      
+      const sHtml = (done) => done ? '<span class="text-[#34c759] font-bold">Completed</span>' : '<span class="text-[#ff3b30] font-bold">Incomplete</span>';
+      document.getElementById('rep-g-prep').innerHTML = sHtml(appState.guided.prepDone); document.getElementById('rep-g-id').innerHTML = sHtml(appState.guided.idDone);
+
+      const qKey = [
+        { id:'q1', ans:'b', text:"1. Spreader slide angle" },
+        { id:'q2', ans:'a', text:"2. Air drying purpose" },
+        { id:'q3', ans:'b', text:"3. Stain buffer function" },
+        { id:'q4', ans:'a', text:"4. Immersion oil objective" },
+        { id:'q5', ans:'a', text:"5. Location for differential" },
+        { id:'q6', ans:'b', text:"6. Wash technique" }
+      ];
+      let qHtml = '';
+      qKey.forEach(q => {
+          const uAns = appState.quizAnswers[q.id] || 'unanswered';
+          const isCorrect = uAns === q.ans;
+          const icon = isCorrect ? '<i class="fa-solid fa-check text-[#34c759]"></i>' : '<i class="fa-solid fa-xmark text-[#ff3b30]"></i>';
+          qHtml += `<div class="mb-3 pb-3 border-b border-gray-100 last:border-0 last:mb-0 last:pb-0">
+              <div class="flex justify-between items-start">
+                  <span class="text-[13px] font-medium text-apple-text">${q.text}</span>
+                  <span class="ml-4">${icon}</span>
+              </div>
+              ${!isCorrect ? `<div class="text-[11px] text-[#ff3b30] mt-1 font-mono">Your input: ${uAns.toUpperCase()} \vert{} Correct Answer: ${q.ans.toUpperCase()}</div>` : ''}
+          </div>`;
+      });
+      document.getElementById('rep-quiz-details').innerHTML = qHtml;
+      document.getElementById('print-quiz-details').innerHTML = qHtml.replace(/text-\[#34c759\]/g, 'style="color:#166534;"').replace(/text-\[#ff3b30\]/g, 'style="color:#991b1b;"');
+
+      const buildPrepDetails = (uId) => {
+            const u = appState[uId];
+            if(!u.prepDone) return '<div class="text-gray-400 italic text-[12px]">No data recorded.</div>';
+            const methodText = u.prepMethodCorrect ? '<span class="text-[#34c759] font-bold">Pass</span>' : '<span class="text-[#ff3b30] font-bold">Fail (Protocol Deviation)</span>';
+            return `<div class="bg-[#f8fafc] border border-gray-200 rounded-lg p-3 text-[12px] mb-3"><div class="flex justify-between border-b border-gray-200 pb-1 mb-1"><strong class="text-apple-sec">Smear & Stain:</strong> ${methodText}</div></div>`;
+      };
+
+      const buildIdDetails = (uId) => {
+            const u = appState[uId];
+            if(!u.idDone) return '<div class="text-gray-400 italic text-[12px]">No data recorded.</div>';
+            const ansText = u.idAnsCorrect ? '<span class="text-[#34c759] font-bold">Correct</span>' : '<span class="text-[#ff3b30] font-bold">Incorrect</span>';
+            return `<div class="bg-[#f8fafc] border border-gray-200 rounded-lg p-3 text-[12px]"><div class="flex justify-between"><strong class="text-apple-sec">Submitted ID:</strong> <span class="capitalize">${u.idSub}</span></div><div class="flex justify-between mt-1"><strong class="text-apple-sec">Accuracy:</strong> <span>${ansText} (Expected: <span class="capitalize">${TARGETS[uId].expected}</span>)</span></div></div>`;
+      };
+
+      document.getElementById('rep-u1-prep').innerHTML = buildPrepDetails('u1'); document.getElementById('rep-u1-id-det').innerHTML = buildIdDetails('u1');
+      document.getElementById('rep-u1-res').textContent = (appState.u1.prepMethodCorrect && appState.u1.idAnsCorrect) ? "PASS" : "FAIL"; 
+      document.getElementById('rep-u1-res').className = (appState.u1.prepMethodCorrect && appState.u1.idAnsCorrect) ? "px-3 py-1.5 rounded-md text-[13px] font-bold bg-[#34c759]/10 text-[#166534]" : "px-3 py-1.5 rounded-md text-[13px] font-bold bg-[#ff3b30]/10 text-[#991b1b]";
+
+      document.getElementById('rep-u2-prep').innerHTML = buildPrepDetails('u2'); document.getElementById('rep-u2-id-det').innerHTML = buildIdDetails('u2');
+      document.getElementById('rep-u2-res').textContent = (appState.u2.prepMethodCorrect && appState.u2.idAnsCorrect) ? "PASS" : "FAIL"; 
+      document.getElementById('rep-u2-res').className = (appState.u2.prepMethodCorrect && appState.u2.idAnsCorrect) ? "px-3 py-1.5 rounded-md text-[13px] font-bold bg-[#34c759]/10 text-[#166534]" : "px-3 py-1.5 rounded-md text-[13px] font-bold bg-[#ff3b30]/10 text-[#991b1b]";
+
+      document.getElementById('print-date').textContent = new Date().toLocaleDateString();
+      document.getElementById('p-name').textContent = appState.stuName; document.getElementById('p-id').textContent = appState.stuId; document.getElementById('p-quiz').textContent = appState.quizScore + "%";
+      document.getElementById('p-g-prep').innerHTML = sHtml(appState.guided.prepDone); document.getElementById('p-g-id').innerHTML = sHtml(appState.guided.idDone);
+      
+      document.getElementById('p-u1-prep').innerHTML = buildPrepDetails('u1'); document.getElementById('p-u1-det').innerHTML = buildIdDetails('u1');
+      document.getElementById('p-u1-res').innerHTML = (appState.u1.prepMethodCorrect && appState.u1.idAnsCorrect) ? "PASS" : "FAIL"; document.getElementById('p-u1-res').style.color = (appState.u1.prepMethodCorrect && appState.u1.idAnsCorrect) ? "#166534" : "#991b1b";
+
+      document.getElementById('p-u2-prep').innerHTML = buildPrepDetails('u2'); document.getElementById('p-u2-det').innerHTML = buildIdDetails('u2');
+      document.getElementById('p-u2-res').innerHTML = (appState.u2.prepMethodCorrect && appState.u2.idAnsCorrect) ? "PASS" : "FAIL"; document.getElementById('p-u2-res').style.color = (appState.u2.prepMethodCorrect && appState.u2.idAnsCorrect) ? "#166534" : "#991b1b";
+    }
+  </script>
+</body>
+</html>
